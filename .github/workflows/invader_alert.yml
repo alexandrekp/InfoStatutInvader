@@ -1,14 +1,13 @@
-name: Space Invader Alert 🎮
+name: Space Invader Alert
 
-on:
+"on":
   schedule:
-    - cron: "0 * * * *"   # toutes les heures
-  workflow_dispatch:       # lancement manuel depuis GitHub possible
+    - cron: "0 * * * *"
+  workflow_dispatch:
 
 jobs:
   check-invaders:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout du repo
         uses: actions/checkout@v4
@@ -31,11 +30,11 @@ jobs:
 
       - name: Vérifier les nouveaux événements
         env:
-          TELEGRAM_TOKEN:   ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python invader_alert.py
 
-      - name: Sauvegarder l'état mis à jour
+      - name: Sauvegarder l'état
         uses: actions/cache/save@v4
         if: always()
         with:
