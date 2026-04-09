@@ -1,9 +1,6 @@
 #!/usr/bin/env python3
 """
 Space Invader Alert — surveillance invader-spotter.art
-Envoie une notification Telegram pour chaque nouvel événement détecté.
-Filtres actifs : villes françaises / tous types d'événements.
-Résumé quotidien à 8h00.
 """
 
 import os
@@ -43,6 +40,12 @@ EMOJIS = {
     "Restauration": "✅", "Réactivation": "♻️", "Alerte": "🚨",
 }
 
+MONTHS_FR = {
+    "janvier":"01","février":"02","mars":"03","avril":"04",
+    "mai":"05","juin":"06","juillet":"07","août":"08",
+    "septembre":"09","octobre":"10","novembre":"11","décembre":"12",
+}
+
 # ── Scraping ─────────────────────────────────────────────────────────────────
 def fetch_news():
     headers = {"User-Agent": "Mozilla/5.0 (compatible; InvaderBot/1.0)"}
@@ -51,66 +54,125 @@ def fetch_news():
     soup = BeautifulSoup(resp.text, "html.parser")
     return parse_events(soup)
 
+
 def parse_events(soup):
     events = []
-    months_fr = {
-        "janvier":"01","février":"02","mars":"03","avril":"04",
-        "mai":"05","juin":"06","juillet":"07","août":"08",
-        "septembre":"09","octobre":"10","novembre":"11","décembre":"12",
-    }
     current_year_month = None
 
-    for tag in soup.find_all(["b", "strong", "p", "br"]):
-        text = tag.get_text(" ", strip=True)
-        for mname, mnum in months_fr.items():
-            if mname in text.lower():
-                for y in range(2020, 2031):
-                    if str(y) in text:
-                        current_year_month = (str(y), mnum)
-                        break
+    # Les news sont dans des balises <b> pour les jours
+    # et les invaders sont dans des liens javascript:lienm("XX",YY)
+    # On extrait directement depuis le HTML brut
 
-    raw_text = soup.get_text("\n")
-    lines = [l.strip() for l in raw_text.splitlines() if l.strip()]
-    current_year_month = None
+    html = str(soup)
+
+    # Extrait tous les codes invader depuis les appels javascript
+    # Format: javascript:lienm("PA",1562) -> PA_1562
+    # On garde aussi le contexte autour pour détecter le type d'événement
+
+    # Cherche les blocs de mois
+    month_pattern = re.compile(
+        r'(janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre)\s+(\d{4})',
+        re.IGNORECASE
+    )
+
+    # Cherche les lignes de news avec leur jour
+    # Format dans le HTML: <b>07 :</b> texte avec lienm(...)
+    day_pattern = re.compile(
+        r'<b>(\d{1,2})\s*:</b>\s*([^<\n]*(?:<[^>]+>[^<\n]*)*?)(?=<b>\d|$)',
+        re.DOTALL
+    )
+
+    # Extrait les codes depuis javascript:lienm("CODE",NUM)
+    invader_pattern = re.compile(r'lienm\("([A-Z0-9]+)",(\d+)\)')
+
+    # Traitement ligne par ligne du texte brut
+    lines = soup.get_text("\n").splitlines()
 
     for line in lines:
-        for mname, mnum in months_fr.items():
+        line = line.strip()
+        if not line:
+            continue
+
+        # Détecte mois/année
+        for mname, mnum in MONTHS_FR.items():
             if mname in line.lower():
                 for y in range(2020, 2031):
                     if str(y) in line:
                         current_year_month = (str(y), mnum)
                         break
-        if current_year_month and re.match(r"^\d{1,2}\s*:", line):
-            parts = line.split(":", 1)
-            if len(parts) == 2:
-                day  = parts[0].strip().zfill(2)
-                rest = parts[1].strip()
-                year, month = current_year_month
-                date_str = f"{year}-{month}-{day}"
-                events.extend(parse_event_line(rest, date_str))
 
+        # Détecte une ligne de news
+        m = re.match(r'^(\d{1,2})\s*:\s*(.+)$', line)
+        if m and current_year_month:
+            day  = m.group(1).zfill(2)
+            rest = m.group(2).strip()
+            year, month = current_year_month
+            date_str = f"{year}-{month}-{day}"
+            events.extend(parse_event_line(rest, date_str))
+
+    # Si toujours 0 événements, essaie avec le HTML brut
+    if len(events) == 0:
+        print("  Tentative parsing HTML brut...")
+        current_year_month = None
+
+        for mname, mnum in MONTHS_FR.items():
+            positions = [m.start() for m in re.finditer(mname, html, re.IGNORECASE)]
+            for pos in positions:
+                context = html[pos:pos+20]
+                for y in range(2020, 2031):
+                    if str(y) in context:
+                        current_year_month = (str(y), mnum)
+
+        # Cherche tous les patterns lienm dans le HTML
+        all_invaders = invader_pattern.findall(html)
+        print(f"  Invaders trouvés dans le HTML: {len(all_invaders)}")
+
+        # Cherche les blocs jour dans le HTML
+        blocks = re.findall(
+            r'<b>(\d{1,2})\s*:</b>(.*?)(?=<b>\d{1,2}\s*:|<br\s*/?>[\s\S]{0,20}<b>|$)',
+            html, re.DOTALL
+        )
+        print(f"  Blocs jour trouvés: {len(blocks)}")
+
+        if current_year_month and blocks:
+            year, month = current_year_month
+            for day, block_html in blocks[:10]:  # derniers 10 jours
+                date_str = f"{year}-{month}-{day.zfill(2)}"
+                # Extrait le texte du bloc
+                block_text = re.sub(r'<[^>]+>', ' ', block_html)
+                block_text = re.sub(r'\s+', ' ', block_text).strip()
+                # Extrait les codes invader du bloc
+                inv_matches = invader_pattern.findall(block_html)
+                invaders = [f"{code}_{num}" for code, num in inv_matches]
+                if invaders and block_text:
+                    events.extend(parse_event_line_with_invaders(block_text, invaders, date_str))
+
+    print(f"  {len(events)} événements trouvés au total")
     return events
 
+
 def parse_event_line(text, date_str):
+    """Parse une ligne texte et extrait les invaders via regex."""
     event_keywords = {
-        "Destruction":  [r"Destruction"],
-        "Dégradation":  [r"Dégradation"],
-        "Ajout":        [r"Ajout"],
-        "Restauration": [r"Restauration"],
-        "Réactivation": [r"Réactivation"],
-        "Alerte":       [r"Alerte"],
+        "Destruction":  r"Destruction",
+        "Dégradation":  r"Dégradation",
+        "Ajout":        r"Ajout",
+        "Restauration": r"Restauration",
+        "Réactivation": r"Réactivation",
+        "Alerte":       r"Alerte",
     }
     results  = []
     segments = re.split(r"\.\s+(?=[A-ZÀÂÉ])", text)
 
     for segment in segments:
         etype = None
-        for et, patterns in event_keywords.items():
-            if any(re.search(p, segment, re.IGNORECASE) for p in patterns):
+        for et, pattern in event_keywords.items():
+            if re.search(pattern, segment, re.IGNORECASE):
                 etype = et
                 break
         if not etype:
             continue
+        # Codes format XX_123 dans le texte
         invaders = re.findall(r'\b([A-Z]{1,6}_\d+)\b', segment)
         if not invaders:
             continue
@@ -120,6 +182,31 @@ def parse_event_line(text, date_str):
         results.append({"date": date_str, "type": etype, "invaders": invaders, "id": uid})
 
     return results
+
+
+def parse_event_line_with_invaders(text, invaders, date_str):
+    """Parse avec des invaders déjà extraits du HTML."""
+    event_keywords = {
+        "Destruction":  r"Destruction",
+        "Dégradation":  r"Dégradation",
+        "Ajout":        r"Ajout",
+        "Restauration": r"Restauration",
+        "Réactivation": r"Réactivation",
+        "Alerte":       r"Alerte",
+    }
+    etype = None
+    for et, pattern in event_keywords.items():
+        if re.search(pattern, text, re.IGNORECASE):
+            etype = et
+            break
+    if not etype or not invaders:
+        return []
+
+    uid = hashlib.md5(
+        f"{date_str}|{etype}|{'|'.join(sorted(invaders))}".encode()
+    ).hexdigest()[:12]
+    return [{"date": date_str, "type": etype, "invaders": invaders, "id": uid}]
+
 
 # ── Filtrage ─────────────────────────────────────────────────────────────────
 def get_city_code(invader_code):
@@ -226,7 +313,7 @@ def main():
     events     = fetch_news()
     new_events = [e for e in events if e["id"] not in seen_ids and should_notify(e)]
 
-    print(f"  {len(events)} événements trouvés, {len(new_events)} nouveaux.")
+    print(f"  {len(new_events)} nouveaux événements à notifier.")
 
     if new_events:
         for event in new_events:
@@ -242,7 +329,7 @@ def main():
 
     save_stats(stats)
 
-    # Résumé quotidien à 8h00 (entre 8h00 et 8h59)
+    # Résumé quotidien à 8h00 UTC (10h00 Paris)
     if now.hour == 8:
         print("  Envoi du résumé quotidien…")
         send_telegram(format_daily_summary(stats))
