@@ -32,7 +32,7 @@ CITY_NAMES = {
     "AVI": "Avignon 🇫🇷", "NIM": "Nîmes 🇫🇷", "BAB": "Bayonne 🇫🇷",
     "MPL": "Montpellier 🇫🇷", "ORLN": "Orléans 🇫🇷", "AMI": "Amiens 🇫🇷",
     "CAZ": "Cazaux 🇫🇷", "LCT": "La Ciotat 🇫🇷", "CAPF": "Cap Ferret 🇫🇷",
-    "PAU": "Pau 🇫🇷",
+    "PAU": "Pau 🇫🇷", "FTBL": "Fontainebleau 🪨",
     # International
     "LDN": "Londres 🇬🇧", "NCL": "Newcastle 🇬🇧", "MAN": "Manchester 🇬🇧",
     "NY": "New York 🇺🇸", "LA": "Los Angeles 🇺🇸", "MIA": "Miami 🇺🇸",
@@ -59,7 +59,6 @@ CITY_NAMES = {
     "CLR": "Clermont 🇫🇷",
     "DJN": "Dijon 🇫🇷",
     "DJBA": "Djibouti 🇩🇯",
-    "FTBL": "Fontainebleau 🪨",
     "BRN": "Berne 🇨🇭",
     "MARS": "Marseille 🇫🇷",
 }
