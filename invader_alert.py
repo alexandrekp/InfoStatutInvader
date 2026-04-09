@@ -312,6 +312,8 @@ def main():
     seen_ids   = load_seen_ids()
     seen_ids = set()  # TEMP: force toutes les notifs
     events     = fetch_news()
+    for e in events:
+    print(f"  EVENT: {e['type']} {e['invaders']} {e['date']}")
     new_events = [e for e in events if e["id"] not in seen_ids and should_notify(e)]
 
     print(f"  {len(new_events)} nouveaux événements à notifier.")
