@@ -1,1 +1,43 @@
+name: Space Invader Alert 🎮
 
+on:
+  schedule:
+    - cron: "0 * * * *"   # toutes les heures
+  workflow_dispatch:       # lancement manuel depuis GitHub possible
+
+jobs:
+  check-invaders:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout du repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Installer les dépendances
+        run: pip install requests beautifulsoup4
+
+      - name: Restaurer l'état précédent
+        uses: actions/cache@v4
+        with:
+          path: last_seen.json
+          key: invader-state-${{ github.run_id }}
+          restore-keys: |
+            invader-state-
+
+      - name: Vérifier les nouveaux événements
+        env:
+          TELEGRAM_TOKEN:   ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python invader_alert.py
+
+      - name: Sauvegarder l'état mis à jour
+        uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: last_seen.json
+          key: invader-state-${{ github.run_id }}
