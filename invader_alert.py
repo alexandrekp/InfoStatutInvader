@@ -65,8 +65,8 @@ CITY_NAMES = {
 }
 
 EMOJIS = {
-    "Destruction": "💥", "Dégradation": "⚠️", "Ajout": "🆕",
-    "Restauration": "✅", "Réactivation": "♻️", "Alerte": "🚨",
+    "Destruction": "❌👾", "Dégradation": "⚠️👾", "Ajout": "🆕👾",
+    "Restauration": "🔧👾", "Réactivation": "🔁👾", "Alerte": "🚨👾",
 }
 
 MONTHS_FR_LONG = {
