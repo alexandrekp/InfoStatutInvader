@@ -59,14 +59,14 @@ CITY_NAMES = {
     "CLR": "Clermont 🇫🇷",
     "DJN": "Dijon 🇫🇷",
     "DJBA": "Djibouti 🇩🇯",
-    "FTBL": "Football ⚽",
+    "FTBL": "Fontainebleau 🪨",
     "BRN": "Berne 🇨🇭",
     "MARS": "Marseille 🇫🇷",
 }
 
 EMOJIS = {
-    "Destruction": "❌👾", "Dégradation": "⚠️👾", "Ajout": "🆕👾",
-    "Restauration": "🔧👾", "Réactivation": "🔁👾", "Alerte": "🚨👾",
+    "Destruction": "🔴", "Dégradation": "🟠", "Ajout": "🟢",
+    "Restauration": "🔵", "Réactivation": "🟣", "Alerte": "🟡",
 }
 
 MONTHS_FR_LONG = {
