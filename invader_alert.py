@@ -227,7 +227,6 @@ def format_message(event, invaders):
 # ── Main ──────────────────────────────────────────────────────────────────────
 def main():
     print(f"[{datetime.now():%Y-%m-%d %H:%M}] Vérification des news…")
-    send_telegram("🧪 Test — Le bot Space Invader est bien actif !")
 
     seen_ids   = load_seen_ids()
     events     = fetch_news()
