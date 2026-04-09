@@ -303,7 +303,6 @@ def main():
     stats = load_stats()
     stats["checks"] += 1
 
-    seen_ids = set()  # TEMP: force toutes les notifs — à retirer après test !
     events   = fetch_news()
 
     # Debug
