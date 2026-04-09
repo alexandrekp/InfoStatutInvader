@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
 Space Invader Alert — surveillance invader-spotter.art
+Tous pays, format minimaliste.
 """
 
 import os
@@ -9,7 +10,6 @@ import hashlib
 import re
 import requests
 from datetime import datetime, timedelta
-from bs4 import BeautifulSoup
 
 TELEGRAM_TOKEN   = os.environ["TELEGRAM_TOKEN"]
 TELEGRAM_CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
@@ -17,29 +17,62 @@ NEWS_URL         = "https://www.invader-spotter.art/news.php"
 STATE_FILE       = "last_seen.json"
 STATS_FILE       = "daily_stats.json"
 
-MAX_DAYS = 30  # Seulement les 30 derniers jours
+MAX_DAYS = 30
 
 WATCHED_TYPES = [
     "Destruction", "Dégradation", "Ajout",
     "Restauration", "Réactivation", "Alerte",
 ]
 
-WATCHED_CITIES = [
-    "PA", "MARS", "GRN", "LY", "TLS", "LIL", "AVI", "NIM",
-    "BAB", "MPL", "ORLN", "AMI", "CAZ", "LCT", "CAPF", "PAU",
-]
-
+# Tous les pays — dictionnaire des codes connus
 CITY_NAMES = {
-    "PA": "Paris", "MARS": "Marseille", "GRN": "Grenoble",
-    "LY": "Lyon", "TLS": "Toulouse", "LIL": "Lille",
-    "AVI": "Avignon", "NIM": "Nîmes", "BAB": "Bayonne-Biarritz",
-    "MPL": "Montpellier", "ORLN": "Orléans", "AMI": "Amiens",
-    "CAZ": "Cazaux", "LCT": "La Ciotat", "CAPF": "Cap Ferret", "PAU": "Pau",
+    # France
+    "PA": "Paris 🇫🇷", "MARS": "Marseille 🇫🇷", "GRN": "Grenoble 🇫🇷",
+    "LY": "Lyon 🇫🇷", "TLS": "Toulouse 🇫🇷", "LIL": "Lille 🇫🇷",
+    "AVI": "Avignon 🇫🇷", "NIM": "Nîmes 🇫🇷", "BAB": "Bayonne 🇫🇷",
+    "MPL": "Montpellier 🇫🇷", "ORLN": "Orléans 🇫🇷", "AMI": "Amiens 🇫🇷",
+    "CAZ": "Cazaux 🇫🇷", "LCT": "La Ciotat 🇫🇷", "CAPF": "Cap Ferret 🇫🇷",
+    "PAU": "Pau 🇫🇷",
+    # International
+    "LDN": "Londres 🇬🇧", "NCL": "Newcastle 🇬🇧", "MAN": "Manchester 🇬🇧",
+    "NY": "New York 🇺🇸", "LA": "Los Angeles 🇺🇸", "MIA": "Miami 🇺🇸",
+    "SD": "San Diego 🇺🇸", "RDU": "Raleigh 🇺🇸",
+    "HK": "Hong Kong 🇭🇰",
+    "TK": "Tokyo 🇯🇵",
+    "BGK": "Bangkok 🇹🇭",
+    "ROM": "Rome 🇮🇹", "VRN": "Vérone 🇮🇹", "MLN": "Milan 🇮🇹",
+    "SP": "Madrid 🇪🇸", "BCN": "Barcelone 🇪🇸",
+    "BXL": "Bruxelles 🇧🇪",
+    "AMS": "Amsterdam 🇳🇱",
+    "BRL": "Berlin 🇩🇪", "MUN": "Munich 🇩🇪",
+    "GNV": "Genève 🇨🇭", "BSL": "Bâle 🇨🇭",
+    "LJU": "Ljubljana 🇸🇮",
+    "IST": "Istanbul 🇹🇷",
+    "SL": "Séoul 🇰🇷",
+    "MLB": "Melbourne 🇦🇺",
+    "BTA": "Bogota 🇨🇴",
+    "RBA": "Rabat 🇲🇦",
+    "KAT": "Katmandou 🇳🇵",
+    "LSN": "Lisbonne 🇵🇹", "PRT": "Porto 🇵🇹",
+    "BBO": "Biarritz 🇫🇷",
+    "WN": "Vienne 🇦🇹",
+    "CLR": "Clermont 🇫🇷",
+    "DJN": "Dijon 🇫🇷",
+    "DJBA": "Djibouti 🇩🇯",
+    "FTBL": "Football ⚽",
+    "BRN": "Berne 🇨🇭",
+    "MARS": "Marseille 🇫🇷",
 }
 
 EMOJIS = {
     "Destruction": "💥", "Dégradation": "⚠️", "Ajout": "🆕",
     "Restauration": "✅", "Réactivation": "♻️", "Alerte": "🚨",
+}
+
+MONTHS_FR_LONG = {
+    "01": "janvier", "02": "février", "03": "mars", "04": "avril",
+    "05": "mai", "06": "juin", "07": "juillet", "08": "août",
+    "09": "septembre", "10": "octobre", "11": "novembre", "12": "décembre",
 }
 
 MONTHS_FR = {
@@ -60,7 +93,6 @@ def parse_html(html):
     events = []
     cutoff = datetime.now() - timedelta(days=MAX_DAYS)
 
-    # Trouve toutes les occurrences de mois+année dans le HTML avec leur position
     month_re = re.compile(
         r'(janvier|f[eé]vrier|mars|avril|mai|juin|juillet|ao[uû]t|septembre|octobre|novembre|d[eé]cembre)\s+(\d{4})',
         re.IGNORECASE
@@ -69,20 +101,15 @@ def parse_html(html):
     for m in month_re.finditer(html):
         mname = m.group(1).lower()
         year  = m.group(2)
-        # Normalise les accents
-        mname = mname.replace('é','é').replace('û','û')
         for k in MONTHS_FR:
-            if k in mname or mname in k:
+            if k[:4] in mname or mname[:4] in k:
                 mnum = MONTHS_FR[k]
                 break
         else:
             continue
         month_positions.append((m.start(), year, mnum))
 
-    # Extrait les codes invader: lienm("PA05",213) -> PA05_213
     invader_re = re.compile(r'lienm\("([^"]+)",\s*(\d+)\)')
-
-    # Extrait les blocs jour: <b>07 :</b> ... jusqu'au prochain <b>dd :</b>
     day_re = re.compile(
         r'<b>(\d{1,2})\s*:</b>(.*?)(?=<b>\d{1,2}\s*:|$)',
         re.DOTALL
@@ -93,7 +120,6 @@ def parse_html(html):
         block_html = day_match.group(2)
         pos        = day_match.start()
 
-        # Détermine mois/année selon la position dans le HTML
         year, mnum = "2026", "01"
         for mpos, my, mm in month_positions:
             if mpos <= pos:
@@ -101,7 +127,6 @@ def parse_html(html):
 
         date_str = f"{year}-{mnum}-{day}"
 
-        # Filtre les dates trop anciennes
         try:
             event_date = datetime.strptime(date_str, "%Y-%m-%d")
             if event_date < cutoff:
@@ -109,19 +134,16 @@ def parse_html(html):
         except ValueError:
             continue
 
-        # Extrait les invaders du bloc
         invaders = [f"{c}_{n}" for c, n in invader_re.findall(block_html)]
         if not invaders:
             continue
 
-        # Texte brut du bloc
         block_text = re.sub(r'<[^>]+>', ' ', block_html)
         block_text = re.sub(r'\s+', ' ', block_text).strip()
 
-        # Détecte le type d'événement
         etype = None
         for et in ["Destruction","Dégradation","Ajout","Restauration","Réactivation","Alerte"]:
-            if et.lower() in block_text.lower() or et[:5].lower() in block_text.lower():
+            if et[:5].lower() in block_text.lower():
                 etype = et
                 break
         if not etype:
@@ -142,24 +164,25 @@ def parse_html(html):
     return events
 
 
-# ── Filtrage ─────────────────────────────────────────────────────────────────
+# ── Helpers ───────────────────────────────────────────────────────────────────
 def get_city_prefix(code):
-    """PA05_213 -> PA, MARS_39 -> MARS"""
     m = re.match(r'^([A-Z]+)', code)
     if not m:
         return ""
     return re.sub(r'\d+$', '', m.group(1))
 
 
-def filter_invaders(event):
-    return [
-        inv for inv in event["invaders"]
-        if get_city_prefix(inv) in WATCHED_CITIES
-    ]
+def city_label(code):
+    prefix = get_city_prefix(code)
+    return CITY_NAMES.get(prefix, prefix)
 
 
-def should_notify(event):
-    return event["type"] in WATCHED_TYPES and len(filter_invaders(event)) > 0
+def format_date(date_str):
+    try:
+        y, m, d = date_str.split("-")
+        return f"{int(d)} {MONTHS_FR_LONG[m]} {y}"
+    except Exception:
+        return date_str
 
 
 # ── État persistant ───────────────────────────────────────────────────────────
@@ -203,25 +226,19 @@ def send_telegram(message):
     resp.raise_for_status()
 
 
-def city_label(code):
-    prefix = get_city_prefix(code)
-    return CITY_NAMES.get(prefix, prefix)
+def format_message(event):
+    emoji     = EMOJIS.get(event["type"], "📍")
+    invaders  = event["invaders"]
+    codes_str = ", ".join(invaders)
+    city      = city_label(invaders[0]) if invaders else "?"
+    date      = format_date(event["date"])
 
-
-def format_message(event, invaders):
-    emoji = EMOJIS.get(event["type"], "📍")
-    lines = [f"{emoji} <b>{event['type']}</b>  —  {event['date']}"]
-    by_city = {}
-    for inv in invaders:
-        city = city_label(inv)
-        by_city.setdefault(city, []).append(inv)
-    for city, codes in by_city.items():
-        lines.append(f"📍 <b>{city}</b> : {', '.join(codes)}")
-        if len(codes) == 1:
-            lines.append(f'   🔗 <a href="https://www.invader-spotter.art/news.php">Voir les news</a>')
-    if len(invaders) > 1:
-        lines.append(f'   🔗 <a href="https://www.invader-spotter.art/news.php">Toutes les news</a>')
-    return "\n".join(lines)
+    return (
+        f"{emoji} <b>{event['type']}</b>\n"
+        f"{codes_str}\n"
+        f"{city} · {date}\n"
+        f'🔗 <a href="https://www.invader-spotter.art/news.php">Voir les news</a>'
+    )
 
 
 def format_daily_summary(stats):
@@ -229,18 +246,14 @@ def format_daily_summary(stats):
     if stats["alerts"] == 0:
         return (
             f"☀️ <b>Résumé du {today}</b>\n"
-            f"✅ Bot actif — {stats['checks']} vérifications\n"
-            f"😌 Aucun événement en France aujourd'hui"
+            f"✅ {stats['checks']} vérifications — aucun événement"
         )
-    lines = [
-        f"📊 <b>Résumé du {today}</b>",
-        f"🔍 {stats['checks']} vérifications — {stats['alerts']} alerte(s)",
-        "",
-    ]
+    lines = [f"📊 <b>Résumé du {today}</b>",
+             f"🔍 {stats['checks']} vérifications — {stats['alerts']} alerte(s)", ""]
     for e in stats["events"]:
         emoji = EMOJIS.get(e["type"], "📍")
         lines.append(f"{emoji} {e['type']} : {', '.join(e['invaders'])}")
-    lines.append(f'\n🔗 <a href="https://www.invader-spotter.art/news.php">Voir toutes les news</a>')
+    lines.append(f'\n🔗 <a href="https://www.invader-spotter.art/news.php">Toutes les news</a>')
     return "\n".join(lines)
 
 
@@ -249,23 +262,22 @@ def main():
     now = datetime.now()
     print(f"[{now:%Y-%m-%d %H:%M}] Vérification des news…")
 
-    stats    = load_stats()
+    stats = load_stats()
     stats["checks"] += 1
 
     seen_ids = load_seen_ids()
     events   = fetch_news()
 
-    new_events = [e for e in events if e["id"] not in seen_ids and should_notify(e)]
+    new_events = [e for e in events if e["id"] not in seen_ids]
     print(f"  {len(new_events)} nouveaux événements à notifier.")
 
     if new_events:
         for event in new_events:
-            invaders = filter_invaders(event)
             try:
-                send_telegram(format_message(event, invaders))
+                send_telegram(format_message(event))
                 stats["alerts"] += 1
-                stats["events"].append({"type": event["type"], "invaders": invaders})
-                print(f"  ✓ {event['type']} — {invaders}")
+                stats["events"].append({"type": event["type"], "invaders": event["invaders"]})
+                print(f"  ✓ {event['type']} — {event['invaders']}")
             except Exception as ex:
                 print(f"  ✗ Erreur Telegram: {ex}")
             seen_ids.add(event["id"])
@@ -275,7 +287,6 @@ def main():
 
     save_stats(stats)
 
-    # Résumé quotidien à 8h UTC (10h Paris)
     if now.hour == 8:
         print("  Envoi du résumé quotidien…")
         try:
