@@ -286,7 +286,7 @@ def main():
 
     save_stats(stats)
 
-    if now.hour == 8:
+    if now.hour == 6:
         print("  Envoi du résumé quotidien…")
         try:
             send_telegram(format_daily_summary(stats))
