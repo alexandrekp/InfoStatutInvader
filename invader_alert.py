@@ -63,7 +63,6 @@ MONTHS_FR = {
     "septembre":"09","octobre":"10","novembre":"11","décembre":"12",
 }
 
-# Chaque type avec son pattern de déclenchement
 TYPE_PATTERNS = [
     ("Destruction",  re.compile(r'Destruction\s+de\s+', re.I)),
     ("Dégradation",  re.compile(r'D[ée]gradation\s+de\s+', re.I)),
@@ -74,7 +73,6 @@ TYPE_PATTERNS = [
 ]
 
 CODE_RE = re.compile(r'\b([A-Z]{2,6}\d*_\d+)\b')
-INVADER_RE = re.compile(r'lienm\("([^"]+)",\s*(\d+)\)')
 
 # ── Scraping ─────────────────────────────────────────────────────────────────
 def fetch_news():
@@ -88,7 +86,6 @@ def parse_html(html):
     events = []
     cutoff = datetime.now() - timedelta(days=MAX_DAYS)
 
-    # Positions des mois
     month_re = re.compile(
         r'(janvier|f[eé]vrier|mars|avril|mai|juin|juillet|ao[uû]t|septembre|octobre|novembre|d[eé]cembre)\s+(\d{4})',
         re.IGNORECASE
@@ -105,7 +102,6 @@ def parse_html(html):
             continue
         month_positions.append((m.start(), year, mnum))
 
-    # Blocs jour
     day_re = re.compile(
         r'<b>(\d{1,2})\s*:</b>(.*?)(?=<b>\d{1,2}\s*:|$)',
         re.DOTALL
@@ -116,7 +112,6 @@ def parse_html(html):
         block_html = day_match.group(2)
         pos        = day_match.start()
 
-        # Mois/année
         year, mnum = "2026", "01"
         for mpos, my, mm in month_positions:
             if mpos <= pos:
@@ -131,28 +126,22 @@ def parse_html(html):
         except ValueError:
             continue
 
-        # Texte brut du bloc
         block_text = re.sub(r'<[^>]+>', ' ', block_html)
         block_text = re.sub(r'\s+', ' ', block_text).strip()
 
-        # Pour chaque type, cherche toutes ses occurrences dans le bloc
+        # DEBUG: affiche chaque bloc capturé
+        print(f"  BLOC {day} {date_str}: {block_text[:120]}")
+
         for etype, pattern in TYPE_PATTERNS:
             for match in pattern.finditer(block_text):
-                # Texte après le mot-clé jusqu'au prochain point ou fin
                 after_keyword = block_text[match.end():]
-                # Coupe au prochain point suivi d'une majuscule
                 segment = re.split(r'\.\s+(?=[A-ZÀÂÉÈÊË])', after_keyword)[0]
-
-                # Extrait les codes dans ce segment
                 codes = CODE_RE.findall(segment)
-
                 if not codes:
                     continue
-
                 uid = hashlib.md5(
                     f"{date_str}|{etype}|{'|'.join(sorted(codes))}".encode()
                 ).hexdigest()[:12]
-
                 events.append({
                     "date":     date_str,
                     "type":     etype,
