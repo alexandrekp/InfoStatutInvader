@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Space Invader Alert — surveillance invader-spotter.art
-Tous pays, format minimaliste, parsing amélioré.
+Tous pays, format minimaliste, parsing par phrase.
 """
 
 import os
@@ -31,31 +31,20 @@ CITY_NAMES = {
     "MPL": "Montpellier 🇫🇷", "ORLN": "Orléans 🇫🇷", "AMI": "Amiens 🇫🇷",
     "CAZ": "Cazaux 🇫🇷", "LCT": "La Ciotat 🇫🇷", "CAPF": "Cap Ferret 🇫🇷",
     "PAU": "Pau 🇫🇷", "CLR": "Clermont 🇫🇷", "DJN": "Dijon 🇫🇷",
-    "BBO": "Biarritz 🇫🇷", "FTBL": "Fontainebleau 🇫🇷",
+    "BBO": "Biarritz 🇫🇷", "FTBL": "Fontainebleau 🇫🇷", "REUN": "La Réunion 🇫🇷",
     "LDN": "Londres 🇬🇧", "NCL": "Newcastle 🇬🇧", "MAN": "Manchester 🇬🇧",
     "NY": "New York 🇺🇸", "LA": "Los Angeles 🇺🇸", "MIA": "Miami 🇺🇸",
     "SD": "San Diego 🇺🇸", "RDU": "Raleigh 🇺🇸",
-    "HK": "Hong Kong 🇭🇰",
-    "TK": "Tokyo 🇯🇵",
-    "BGK": "Bangkok 🇹🇭",
+    "HK": "Hong Kong 🇭🇰", "TK": "Tokyo 🇯🇵", "BGK": "Bangkok 🇹🇭",
     "ROM": "Rome 🇮🇹", "VRN": "Vérone 🇮🇹",
     "SP": "Madrid 🇪🇸", "BCN": "Barcelone 🇪🇸",
-    "BXL": "Bruxelles 🇧🇪",
-    "AMS": "Amsterdam 🇳🇱",
+    "BXL": "Bruxelles 🇧🇪", "AMS": "Amsterdam 🇳🇱",
     "BRL": "Berlin 🇩🇪", "MUN": "Munich 🇩🇪",
     "GNV": "Genève 🇨🇭", "BSL": "Bâle 🇨🇭", "BRN": "Berne 🇨🇭",
-    "LJU": "Ljubljana 🇸🇮",
-    "IST": "Istanbul 🇹🇷",
-    "SL": "Séoul 🇰🇷",
-    "MLB": "Melbourne 🇦🇺",
-    "BTA": "Bogota 🇨🇴",
-    "RBA": "Rabat 🇲🇦",
-    "KAT": "Katmandou 🇳🇵",
-    "LSN": "Lisbonne 🇵🇹", "PRT": "Porto 🇵🇹",
-    "WN": "Vienne 🇦🇹",
-    "DJBA": "Djibouti 🇩🇯",
-    "REUN": "La Réunion 🇫🇷",
-    "GRU": "Guadaloupe 🇫🇷",
+    "LJU": "Ljubljana 🇸🇮", "IST": "Istanbul 🇹🇷", "SL": "Séoul 🇰🇷",
+    "MLB": "Melbourne 🇦🇺", "BTA": "Bogota 🇨🇴", "RBA": "Rabat 🇲🇦",
+    "KAT": "Katmandou 🇳🇵", "LSN": "Lisbonne 🇵🇹", "PRT": "Porto 🇵🇹",
+    "WN": "Vienne 🇦🇹", "DJBA": "Djibouti 🇩🇯",
 }
 
 EMOJIS = {
@@ -79,6 +68,16 @@ MONTHS_FR = {
     "septembre":"09","octobre":"10","novembre":"11","décembre":"12",
 }
 
+# Patterns pour détecter les types d'événements
+TYPE_PATTERNS = [
+    ("Destruction",  re.compile(r'Destruction\s+de', re.I)),
+    ("Dégradation",  re.compile(r'D.gradation\s+de', re.I)),
+    ("Ajout",        re.compile(r'Ajout\s+d', re.I)),
+    ("Restauration", re.compile(r'Restauration\s+de', re.I)),
+    ("Réactivation", re.compile(r'R.activation\s+de', re.I)),
+    ("Alerte",       re.compile(r'Alerte\s+à\s+propos', re.I)),
+]
+
 # ── Scraping ─────────────────────────────────────────────────────────────────
 def fetch_news():
     headers = {"User-Agent": "Mozilla/5.0 (compatible; InvaderBot/1.0)"}
@@ -91,7 +90,7 @@ def parse_html(html):
     events = []
     cutoff = datetime.now() - timedelta(days=MAX_DAYS)
 
-    # Trouve toutes les positions des mois dans le HTML
+    # Positions des mois dans le HTML
     month_re = re.compile(
         r'(janvier|f[eé]vrier|mars|avril|mai|juin|juillet|ao[uû]t|septembre|octobre|novembre|d[eé]cembre)\s+(\d{4})',
         re.IGNORECASE
@@ -108,31 +107,20 @@ def parse_html(html):
             continue
         month_positions.append((m.start(), year, mnum))
 
-    # Pattern pour extraire les codes invader: lienm("PA05",213) -> PA05_213
     invader_re = re.compile(r'lienm\("([^"]+)",\s*(\d+)\)')
 
-    # Pattern pour les blocs jour: <b>14 :</b> texte...
+    # Blocs jour: <b>14 :</b> ... jusqu'au prochain <b>dd :</b>
     day_re = re.compile(
         r'<b>(\d{1,2})\s*:</b>(.*?)(?=<b>\d{1,2}\s*:|$)',
         re.DOTALL
     )
-
-    # Mots-clés pour chaque type d'événement
-    type_patterns = [
-        ("Destruction",  re.compile(r'Destruction', re.I)),
-        ("Dégradation",  re.compile(r'D.gradation', re.I)),
-        ("Ajout",        re.compile(r'Ajout', re.I)),
-        ("Restauration", re.compile(r'Restauration', re.I)),
-        ("Réactivation", re.compile(r'R.activation', re.I)),
-        ("Alerte",       re.compile(r'Alerte\s+à\s+propos', re.I)),
-    ]
 
     for day_match in day_re.finditer(html):
         day        = day_match.group(1).zfill(2)
         block_html = day_match.group(2)
         pos        = day_match.start()
 
-        # Détermine mois/année selon position dans le HTML
+        # Mois/année selon position
         year, mnum = "2026", "01"
         for mpos, my, mm in month_positions:
             if mpos <= pos:
@@ -140,7 +128,6 @@ def parse_html(html):
 
         date_str = f"{year}-{mnum}-{day}"
 
-        # Filtre les dates trop anciennes
         try:
             event_date = datetime.strptime(date_str, "%Y-%m-%d")
             if event_date < cutoff:
@@ -148,51 +135,51 @@ def parse_html(html):
         except ValueError:
             continue
 
-        # Texte brut du bloc
+        # Découpe le HTML du bloc en sous-blocs par phrase
+        # Chaque phrase peut contenir un type différent
+        # On split sur ". " dans le texte brut mais on garde le HTML associé
         block_text = re.sub(r'<[^>]+>', ' ', block_html)
         block_text = re.sub(r'\s+', ' ', block_text).strip()
 
-        # Découpe le bloc en segments par ". " pour gérer plusieurs événements
-        # Ex: "Mise à jour de X. Dégradation de Y. Destruction de Z"
-        segments = re.split(r'\.\s+(?=[A-ZÀÂÉ])', block_text)
+        # Découpe en phrases
+        phrases = re.split(r'\.\s+(?=[A-ZÀÂÉÈÊË])', block_text)
 
-        for segment in segments:
-            # Détecte le type d'événement du segment
+        # Pour chaque phrase, trouve le type et les invaders correspondants
+        for phrase in phrases:
+            phrase = phrase.strip()
+            if not phrase:
+                continue
+
+            # Détecte le type
             etype = None
-            for et, pattern in type_patterns:
-                if pattern.search(segment):
+            for et, pattern in TYPE_PATTERNS:
+                if pattern.search(phrase):
                     etype = et
                     break
             if not etype:
                 continue
 
-            # Extrait les invaders mentionnés dans ce segment depuis le HTML
-            # On cherche les lienm() qui correspondent aux codes dans le segment
-            seg_invaders = []
-            for code, num in invader_re.findall(block_html):
-                inv_code = f"{code}_{num}"
-                # Vérifie si ce code est mentionné dans le segment (format XX_NUM)
-                base_code = re.sub(r'\d+$', '', code)
-                if base_code in segment or f"{base_code}_{num}" in segment or num in segment:
-                    seg_invaders.append(inv_code)
+            # Extrait les codes invader mentionnés dans cette phrase
+            # Format dans la phrase: "FTBL_46" ou "PA_1562" etc.
+            phrase_codes = re.findall(r'\b([A-Z]{2,6}\d*_\d+)\b', phrase)
 
-            # Fallback: prend tous les invaders du bloc si segment pas trouvé
-            if not seg_invaders:
-                all_invaders = [f"{c}_{n}" for c, n in invader_re.findall(block_html)]
-                if all_invaders:
-                    seg_invaders = all_invaders
+            # Si pas trouvé dans la phrase texte, cherche dans le HTML
+            # via les lienm() correspondants
+            if not phrase_codes:
+                phrase_codes = [f"{c}_{n}" for c, n in invader_re.findall(block_html)]
 
-            if not seg_invaders:
+            # Normalise les codes (PA19_1562 -> garde tel quel)
+            if not phrase_codes:
                 continue
 
             uid = hashlib.md5(
-                f"{date_str}|{etype}|{'|'.join(sorted(seg_invaders))}".encode()
+                f"{date_str}|{etype}|{'|'.join(sorted(phrase_codes))}".encode()
             ).hexdigest()[:12]
 
             events.append({
                 "date":     date_str,
                 "type":     etype,
-                "invaders": seg_invaders,
+                "invaders": phrase_codes,
                 "id":       uid,
             })
 
