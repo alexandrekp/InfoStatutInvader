@@ -68,7 +68,6 @@ MONTHS_FR = {
     "septembre":"09","octobre":"10","novembre":"11","décembre":"12",
 }
 
-# Patterns pour détecter les types d'événements
 TYPE_PATTERNS = [
     ("Destruction",  re.compile(r'Destruction\s+de', re.I)),
     ("Dégradation",  re.compile(r'D.gradation\s+de', re.I)),
@@ -90,7 +89,6 @@ def parse_html(html):
     events = []
     cutoff = datetime.now() - timedelta(days=MAX_DAYS)
 
-    # Positions des mois dans le HTML
     month_re = re.compile(
         r'(janvier|f[eé]vrier|mars|avril|mai|juin|juillet|ao[uû]t|septembre|octobre|novembre|d[eé]cembre)\s+(\d{4})',
         re.IGNORECASE
@@ -109,7 +107,6 @@ def parse_html(html):
 
     invader_re = re.compile(r'lienm\("([^"]+)",\s*(\d+)\)')
 
-    # Blocs jour: <b>14 :</b> ... jusqu'au prochain <b>dd :</b>
     day_re = re.compile(
         r'<b>(\d{1,2})\s*:</b>(.*?)(?=<b>\d{1,2}\s*:|$)',
         re.DOTALL
@@ -120,7 +117,6 @@ def parse_html(html):
         block_html = day_match.group(2)
         pos        = day_match.start()
 
-        # Mois/année selon position
         year, mnum = "2026", "01"
         for mpos, my, mm in month_positions:
             if mpos <= pos:
@@ -135,22 +131,16 @@ def parse_html(html):
         except ValueError:
             continue
 
-        # Découpe le HTML du bloc en sous-blocs par phrase
-        # Chaque phrase peut contenir un type différent
-        # On split sur ". " dans le texte brut mais on garde le HTML associé
         block_text = re.sub(r'<[^>]+>', ' ', block_html)
         block_text = re.sub(r'\s+', ' ', block_text).strip()
 
-        # Découpe en phrases
         phrases = re.split(r'\.\s+(?=[A-ZÀÂÉÈÊË])', block_text)
 
-        # Pour chaque phrase, trouve le type et les invaders correspondants
         for phrase in phrases:
             phrase = phrase.strip()
             if not phrase:
                 continue
 
-            # Détecte le type
             etype = None
             for et, pattern in TYPE_PATTERNS:
                 if pattern.search(phrase):
@@ -159,16 +149,11 @@ def parse_html(html):
             if not etype:
                 continue
 
-            # Extrait les codes invader mentionnés dans cette phrase
-            # Format dans la phrase: "FTBL_46" ou "PA_1562" etc.
             phrase_codes = re.findall(r'\b([A-Z]{2,6}\d*_\d+)\b', phrase)
 
-            # Si pas trouvé dans la phrase texte, cherche dans le HTML
-            # via les lienm() correspondants
             if not phrase_codes:
                 phrase_codes = [f"{c}_{n}" for c, n in invader_re.findall(block_html)]
 
-            # Normalise les codes (PA19_1562 -> garde tel quel)
             if not phrase_codes:
                 continue
 
@@ -291,10 +276,11 @@ def main():
     stats = load_stats()
     stats["checks"] += 1
 
-    seen_ids = set()
+    seen_ids = set()  # TEMP — retirer après test
     events   = fetch_news()
+
     for e in events:
-    print(f"  FOUND: {e['date']} {e['type']} {e['invaders']}")
+        print(f"  FOUND: {e['date']} {e['type']} {e['invaders']}")
 
     new_events = [e for e in events if e["id"] not in seen_ids]
     print(f"  {len(new_events)} nouveaux événements à notifier.")
@@ -318,7 +304,6 @@ def main():
 
     save_stats(stats)
 
-    # Résumé quotidien à 6h UTC = ~8h Paris
     if now.hour == 6:
         print("  Envoi du résumé quotidien…")
         try:
