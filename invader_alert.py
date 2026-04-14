@@ -127,12 +127,9 @@ def parse_html(html):
         except ValueError:
             continue
 
-        # Supprime les balises HTML et décode les entités HTML (&eacute; -> é)
         block_text = re.sub(r'<[^>]+>', ' ', block_html)
         block_text = html_lib.unescape(block_text)
         block_text = re.sub(r'\s+', ' ', block_text).strip()
-
-        print(f"  BLOC {day} {date_str}: {block_text[:120]}")
 
         for etype, pattern in TYPE_PATTERNS:
             for match in pattern.finditer(block_text):
@@ -259,11 +256,8 @@ def main():
     stats = load_stats()
     stats["checks"] += 1
 
-    seen_ids = set()  # TEMP — retirer après test
+    seen_ids = load_seen_ids()
     events   = fetch_news()
-
-    for e in events:
-        print(f"  FOUND: {e['date']} {e['type']} {e['invaders']}")
 
     new_events = [e for e in events if e["id"] not in seen_ids]
     print(f"  {len(new_events)} nouveaux événements à notifier.")
