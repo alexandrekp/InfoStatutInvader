@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """
 Space Invader Alert — surveillance invader-spotter.art
-Tous pays, format minimaliste, parsing par type dans chaque bloc.
+Tous pays, format minimaliste, parsing robuste avec décodage HTML.
 """
 
 import os
 import json
 import hashlib
 import re
+import html as html_lib
 import requests
 from datetime import datetime, timedelta
 
@@ -126,10 +127,11 @@ def parse_html(html):
         except ValueError:
             continue
 
+        # Supprime les balises HTML et décode les entités HTML (&eacute; -> é)
         block_text = re.sub(r'<[^>]+>', ' ', block_html)
+        block_text = html_lib.unescape(block_text)
         block_text = re.sub(r'\s+', ' ', block_text).strip()
 
-        # DEBUG: affiche chaque bloc capturé
         print(f"  BLOC {day} {date_str}: {block_text[:120]}")
 
         for etype, pattern in TYPE_PATTERNS:
