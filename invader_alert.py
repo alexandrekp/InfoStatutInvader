@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Space Invader Alert — surveillance invader-spotter.art
-Tous pays, format minimaliste.
+Tous pays, format minimaliste, parsing amélioré.
 """
 
 import os
@@ -24,28 +24,26 @@ WATCHED_TYPES = [
     "Restauration", "Réactivation", "Alerte",
 ]
 
-# Tous les pays — dictionnaire des codes connus
 CITY_NAMES = {
-    # France
     "PA": "Paris 🇫🇷", "MARS": "Marseille 🇫🇷", "GRN": "Grenoble 🇫🇷",
     "LY": "Lyon 🇫🇷", "TLS": "Toulouse 🇫🇷", "LIL": "Lille 🇫🇷",
     "AVI": "Avignon 🇫🇷", "NIM": "Nîmes 🇫🇷", "BAB": "Bayonne 🇫🇷",
     "MPL": "Montpellier 🇫🇷", "ORLN": "Orléans 🇫🇷", "AMI": "Amiens 🇫🇷",
     "CAZ": "Cazaux 🇫🇷", "LCT": "La Ciotat 🇫🇷", "CAPF": "Cap Ferret 🇫🇷",
-    "PAU": "Pau 🇫🇷", "FTBL": "Fontainebleau 🪨",
-    # International
+    "PAU": "Pau 🇫🇷", "CLR": "Clermont 🇫🇷", "DJN": "Dijon 🇫🇷",
+    "BBO": "Biarritz 🇫🇷", "FTBL": "Fontainebleau 🇫🇷",
     "LDN": "Londres 🇬🇧", "NCL": "Newcastle 🇬🇧", "MAN": "Manchester 🇬🇧",
     "NY": "New York 🇺🇸", "LA": "Los Angeles 🇺🇸", "MIA": "Miami 🇺🇸",
     "SD": "San Diego 🇺🇸", "RDU": "Raleigh 🇺🇸",
     "HK": "Hong Kong 🇭🇰",
     "TK": "Tokyo 🇯🇵",
     "BGK": "Bangkok 🇹🇭",
-    "ROM": "Rome 🇮🇹", "VRN": "Vérone 🇮🇹", "MLN": "Milan 🇮🇹",
+    "ROM": "Rome 🇮🇹", "VRN": "Vérone 🇮🇹",
     "SP": "Madrid 🇪🇸", "BCN": "Barcelone 🇪🇸",
     "BXL": "Bruxelles 🇧🇪",
     "AMS": "Amsterdam 🇳🇱",
     "BRL": "Berlin 🇩🇪", "MUN": "Munich 🇩🇪",
-    "GNV": "Genève 🇨🇭", "BSL": "Bâle 🇨🇭",
+    "GNV": "Genève 🇨🇭", "BSL": "Bâle 🇨🇭", "BRN": "Berne 🇨🇭",
     "LJU": "Ljubljana 🇸🇮",
     "IST": "Istanbul 🇹🇷",
     "SL": "Séoul 🇰🇷",
@@ -54,18 +52,19 @@ CITY_NAMES = {
     "RBA": "Rabat 🇲🇦",
     "KAT": "Katmandou 🇳🇵",
     "LSN": "Lisbonne 🇵🇹", "PRT": "Porto 🇵🇹",
-    "BBO": "Biarritz 🇫🇷",
     "WN": "Vienne 🇦🇹",
-    "CLR": "Clermont 🇫🇷",
-    "DJN": "Dijon 🇫🇷",
     "DJBA": "Djibouti 🇩🇯",
-    "BRN": "Berne 🇨🇭",
-    "MARS": "Marseille 🇫🇷",
+    "REUN": "La Réunion 🇫🇷",
+    "GRU": "Guadaloupe 🇫🇷",
 }
 
 EMOJIS = {
-    "Destruction": "🔴", "Dégradation": "🟠", "Ajout": "🟢",
-    "Restauration": "🔵", "Réactivation": "🟣", "Alerte": "🟡",
+    "Destruction":  "🔴",
+    "Dégradation":  "🟠",
+    "Ajout":        "🟢",
+    "Restauration": "🔵",
+    "Réactivation": "🟣",
+    "Alerte":       "🟡",
 }
 
 MONTHS_FR_LONG = {
@@ -92,6 +91,7 @@ def parse_html(html):
     events = []
     cutoff = datetime.now() - timedelta(days=MAX_DAYS)
 
+    # Trouve toutes les positions des mois dans le HTML
     month_re = re.compile(
         r'(janvier|f[eé]vrier|mars|avril|mai|juin|juillet|ao[uû]t|septembre|octobre|novembre|d[eé]cembre)\s+(\d{4})',
         re.IGNORECASE
@@ -108,17 +108,31 @@ def parse_html(html):
             continue
         month_positions.append((m.start(), year, mnum))
 
+    # Pattern pour extraire les codes invader: lienm("PA05",213) -> PA05_213
     invader_re = re.compile(r'lienm\("([^"]+)",\s*(\d+)\)')
+
+    # Pattern pour les blocs jour: <b>14 :</b> texte...
     day_re = re.compile(
         r'<b>(\d{1,2})\s*:</b>(.*?)(?=<b>\d{1,2}\s*:|$)',
         re.DOTALL
     )
+
+    # Mots-clés pour chaque type d'événement
+    type_patterns = [
+        ("Destruction",  re.compile(r'Destruction', re.I)),
+        ("Dégradation",  re.compile(r'D.gradation', re.I)),
+        ("Ajout",        re.compile(r'Ajout', re.I)),
+        ("Restauration", re.compile(r'Restauration', re.I)),
+        ("Réactivation", re.compile(r'R.activation', re.I)),
+        ("Alerte",       re.compile(r'Alerte\s+à\s+propos', re.I)),
+    ]
 
     for day_match in day_re.finditer(html):
         day        = day_match.group(1).zfill(2)
         block_html = day_match.group(2)
         pos        = day_match.start()
 
+        # Détermine mois/année selon position dans le HTML
         year, mnum = "2026", "01"
         for mpos, my, mm in month_positions:
             if mpos <= pos:
@@ -126,6 +140,7 @@ def parse_html(html):
 
         date_str = f"{year}-{mnum}-{day}"
 
+        # Filtre les dates trop anciennes
         try:
             event_date = datetime.strptime(date_str, "%Y-%m-%d")
             if event_date < cutoff:
@@ -133,31 +148,53 @@ def parse_html(html):
         except ValueError:
             continue
 
-        invaders = [f"{c}_{n}" for c, n in invader_re.findall(block_html)]
-        if not invaders:
-            continue
-
+        # Texte brut du bloc
         block_text = re.sub(r'<[^>]+>', ' ', block_html)
         block_text = re.sub(r'\s+', ' ', block_text).strip()
 
-        etype = None
-        for et in ["Destruction","Dégradation","Ajout","Restauration","Réactivation","Alerte"]:
-            if et[:5].lower() in block_text.lower():
-                etype = et
-                break
-        if not etype:
-            continue
+        # Découpe le bloc en segments par ". " pour gérer plusieurs événements
+        # Ex: "Mise à jour de X. Dégradation de Y. Destruction de Z"
+        segments = re.split(r'\.\s+(?=[A-ZÀÂÉ])', block_text)
 
-        uid = hashlib.md5(
-            f"{date_str}|{etype}|{'|'.join(sorted(invaders))}".encode()
-        ).hexdigest()[:12]
+        for segment in segments:
+            # Détecte le type d'événement du segment
+            etype = None
+            for et, pattern in type_patterns:
+                if pattern.search(segment):
+                    etype = et
+                    break
+            if not etype:
+                continue
 
-        events.append({
-            "date":     date_str,
-            "type":     etype,
-            "invaders": invaders,
-            "id":       uid,
-        })
+            # Extrait les invaders mentionnés dans ce segment depuis le HTML
+            # On cherche les lienm() qui correspondent aux codes dans le segment
+            seg_invaders = []
+            for code, num in invader_re.findall(block_html):
+                inv_code = f"{code}_{num}"
+                # Vérifie si ce code est mentionné dans le segment (format XX_NUM)
+                base_code = re.sub(r'\d+$', '', code)
+                if base_code in segment or f"{base_code}_{num}" in segment or num in segment:
+                    seg_invaders.append(inv_code)
+
+            # Fallback: prend tous les invaders du bloc si segment pas trouvé
+            if not seg_invaders:
+                all_invaders = [f"{c}_{n}" for c, n in invader_re.findall(block_html)]
+                if all_invaders:
+                    seg_invaders = all_invaders
+
+            if not seg_invaders:
+                continue
+
+            uid = hashlib.md5(
+                f"{date_str}|{etype}|{'|'.join(sorted(seg_invaders))}".encode()
+            ).hexdigest()[:12]
+
+            events.append({
+                "date":     date_str,
+                "type":     etype,
+                "invaders": seg_invaders,
+                "id":       uid,
+            })
 
     print(f"  {len(events)} événements trouvés (30 derniers jours)")
     return events
@@ -226,7 +263,7 @@ def send_telegram(message):
 
 
 def format_message(event):
-    emoji     = EMOJIS.get(event["type"], "📍")
+    emoji     = EMOJIS.get(event["type"], "⚪")
     invaders  = event["invaders"]
     codes_str = ", ".join(invaders)
     city      = city_label(invaders[0]) if invaders else "?"
@@ -247,10 +284,13 @@ def format_daily_summary(stats):
             f"☀️ <b>Résumé du {today}</b>\n"
             f"✅ {stats['checks']} vérifications — aucun événement"
         )
-    lines = [f"📊 <b>Résumé du {today}</b>",
-             f"🔍 {stats['checks']} vérifications — {stats['alerts']} alerte(s)", ""]
+    lines = [
+        f"📊 <b>Résumé du {today}</b>",
+        f"🔍 {stats['checks']} vérifications — {stats['alerts']} alerte(s)",
+        "",
+    ]
     for e in stats["events"]:
-        emoji = EMOJIS.get(e["type"], "📍")
+        emoji = EMOJIS.get(e["type"], "⚪")
         lines.append(f"{emoji} {e['type']} : {', '.join(e['invaders'])}")
     lines.append(f'\n🔗 <a href="https://www.invader-spotter.art/news.php">Toutes les news</a>')
     return "\n".join(lines)
@@ -275,7 +315,10 @@ def main():
             try:
                 send_telegram(format_message(event))
                 stats["alerts"] += 1
-                stats["events"].append({"type": event["type"], "invaders": event["invaders"]})
+                stats["events"].append({
+                    "type": event["type"],
+                    "invaders": event["invaders"]
+                })
                 print(f"  ✓ {event['type']} — {event['invaders']}")
             except Exception as ex:
                 print(f"  ✗ Erreur Telegram: {ex}")
@@ -286,6 +329,7 @@ def main():
 
     save_stats(stats)
 
+    # Résumé quotidien à 6h UTC = ~8h Paris
     if now.hour == 6:
         print("  Envoi du résumé quotidien…")
         try:
