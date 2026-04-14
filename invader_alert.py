@@ -304,7 +304,7 @@ def main():
     stats = load_stats()
     stats["checks"] += 1
 
-    seen_ids = load_seen_ids()
+    seen_ids = set()
     events   = fetch_news()
 
     new_events = [e for e in events if e["id"] not in seen_ids]
