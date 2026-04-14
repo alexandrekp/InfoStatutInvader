@@ -293,6 +293,8 @@ def main():
 
     seen_ids = set()
     events   = fetch_news()
+    for e in events:
+    print(f"  FOUND: {e['date']} {e['type']} {e['invaders']}")
 
     new_events = [e for e in events if e["id"] not in seen_ids]
     print(f"  {len(new_events)} nouveaux événements à notifier.")
