@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Space Invader Alert — surveillance invader-spotter.art
-Tous pays, format minimaliste, parsing par phrase.
+Tous pays, format minimaliste, parsing par type dans chaque bloc.
 """
 
 import os
@@ -18,11 +18,6 @@ STATE_FILE       = "last_seen.json"
 STATS_FILE       = "daily_stats.json"
 
 MAX_DAYS = 30
-
-WATCHED_TYPES = [
-    "Destruction", "Dégradation", "Ajout",
-    "Restauration", "Réactivation", "Alerte",
-]
 
 CITY_NAMES = {
     "PA": "Paris 🇫🇷", "MARS": "Marseille 🇫🇷", "GRN": "Grenoble 🇫🇷",
@@ -68,14 +63,18 @@ MONTHS_FR = {
     "septembre":"09","octobre":"10","novembre":"11","décembre":"12",
 }
 
+# Chaque type avec son pattern de déclenchement
 TYPE_PATTERNS = [
-    ("Destruction",  re.compile(r'Destruction\s+de', re.I)),
-    ("Dégradation",  re.compile(r'D.gradation\s+de', re.I)),
+    ("Destruction",  re.compile(r'Destruction\s+de\s+', re.I)),
+    ("Dégradation",  re.compile(r'D[ée]gradation\s+de\s+', re.I)),
     ("Ajout",        re.compile(r'Ajout\s+d', re.I)),
-    ("Restauration", re.compile(r'Restauration\s+de', re.I)),
-    ("Réactivation", re.compile(r'R.activation\s+de', re.I)),
-    ("Alerte",       re.compile(r'Alerte\s+à\s+propos', re.I)),
+    ("Restauration", re.compile(r'Restauration\s+de\s+', re.I)),
+    ("Réactivation", re.compile(r'R[ée]activation\s+de\s+', re.I)),
+    ("Alerte",       re.compile(r'Alerte\s+à\s+propos\s+de\s+', re.I)),
 ]
+
+CODE_RE = re.compile(r'\b([A-Z]{2,6}\d*_\d+)\b')
+INVADER_RE = re.compile(r'lienm\("([^"]+)",\s*(\d+)\)')
 
 # ── Scraping ─────────────────────────────────────────────────────────────────
 def fetch_news():
@@ -89,6 +88,7 @@ def parse_html(html):
     events = []
     cutoff = datetime.now() - timedelta(days=MAX_DAYS)
 
+    # Positions des mois
     month_re = re.compile(
         r'(janvier|f[eé]vrier|mars|avril|mai|juin|juillet|ao[uû]t|septembre|octobre|novembre|d[eé]cembre)\s+(\d{4})',
         re.IGNORECASE
@@ -105,8 +105,7 @@ def parse_html(html):
             continue
         month_positions.append((m.start(), year, mnum))
 
-    invader_re = re.compile(r'lienm\("([^"]+)",\s*(\d+)\)')
-
+    # Blocs jour
     day_re = re.compile(
         r'<b>(\d{1,2})\s*:</b>(.*?)(?=<b>\d{1,2}\s*:|$)',
         re.DOTALL
@@ -117,6 +116,7 @@ def parse_html(html):
         block_html = day_match.group(2)
         pos        = day_match.start()
 
+        # Mois/année
         year, mnum = "2026", "01"
         for mpos, my, mm in month_positions:
             if mpos <= pos:
@@ -131,42 +131,34 @@ def parse_html(html):
         except ValueError:
             continue
 
+        # Texte brut du bloc
         block_text = re.sub(r'<[^>]+>', ' ', block_html)
         block_text = re.sub(r'\s+', ' ', block_text).strip()
 
-        phrases = re.split(r'\.\s+(?=[A-ZÀÂÉÈÊË])', block_text)
+        # Pour chaque type, cherche toutes ses occurrences dans le bloc
+        for etype, pattern in TYPE_PATTERNS:
+            for match in pattern.finditer(block_text):
+                # Texte après le mot-clé jusqu'au prochain point ou fin
+                after_keyword = block_text[match.end():]
+                # Coupe au prochain point suivi d'une majuscule
+                segment = re.split(r'\.\s+(?=[A-ZÀÂÉÈÊË])', after_keyword)[0]
 
-        for phrase in phrases:
-            phrase = phrase.strip()
-            if not phrase:
-                continue
+                # Extrait les codes dans ce segment
+                codes = CODE_RE.findall(segment)
 
-            etype = None
-            for et, pattern in TYPE_PATTERNS:
-                if pattern.search(phrase):
-                    etype = et
-                    break
-            if not etype:
-                continue
+                if not codes:
+                    continue
 
-            phrase_codes = re.findall(r'\b([A-Z]{2,6}\d*_\d+)\b', phrase)
+                uid = hashlib.md5(
+                    f"{date_str}|{etype}|{'|'.join(sorted(codes))}".encode()
+                ).hexdigest()[:12]
 
-            if not phrase_codes:
-                phrase_codes = [f"{c}_{n}" for c, n in invader_re.findall(block_html)]
-
-            if not phrase_codes:
-                continue
-
-            uid = hashlib.md5(
-                f"{date_str}|{etype}|{'|'.join(sorted(phrase_codes))}".encode()
-            ).hexdigest()[:12]
-
-            events.append({
-                "date":     date_str,
-                "type":     etype,
-                "invaders": phrase_codes,
-                "id":       uid,
-            })
+                events.append({
+                    "date":     date_str,
+                    "type":     etype,
+                    "invaders": codes,
+                    "id":       uid,
+                })
 
     print(f"  {len(events)} événements trouvés (30 derniers jours)")
     return events
